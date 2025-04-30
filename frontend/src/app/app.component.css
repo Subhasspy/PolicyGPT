@@ -1,0 +1,5 @@
+.main-content {
+  padding-top: 4rem; /* Ensures content starts below fixed header */
+  min-height: calc(100vh - 4rem);
+  width: 100%;
+}

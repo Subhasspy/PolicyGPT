@@ -1,0 +1,76 @@
+/* You can add global styles to this file, and also import other style files */
+
+/* Global styles */
+:root {
+  --primary-color: rgb(199, 102, 235);
+  --accent-color: rgb(255, 255, 255);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  transition: box-shadow 0.3s ease;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #f8f9fa;
+  color: #333;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure app root takes full height */
+app-root {
+  display: block;
+  min-height: 100vh;
+}
+
+/* Global button styles */
+button {
+  cursor: pointer;
+  border: none !important;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+input:focus, select:focus, button:focus {
+  outline: none;
+  box-shadow: var(--shadow-md);
+}
+
+button, input, select {
+  font-family: inherit;
+}
+
+/* Common card styles */
+.card {
+  background: var(--accent-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+}
