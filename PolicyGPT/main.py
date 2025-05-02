@@ -127,22 +127,53 @@ async def process_single_file(
 
 @app.post("/upload")
 async def upload_files(
-    files: List[UploadFile] = File(...),
-    target_language: Optional[str] = Query(
-        default=None,
-        description="Optional target language code for translation"
-    ),
-    document_type: str = Form(
-        default="general",
-        description="Type of document to process"
-    ),
-    custom_prompt: Optional[str] = Form(
-        default=None,
-        description="Custom prompt to override default prompts"
-    )
+    files: List[UploadFile] = File(default=[]),
+    target_language: Optional[str] = Form(None),
+    document_type: str = Form(default="general"),
+    custom_prompt: Optional[str] = Form(None),
+    existing_summaries: Optional[str] = Form(None)
 ):
     """Upload and process multiple PDF files concurrently"""
     try:
+        logger.info(f"Received upload request - files: {len(files)}, target_language: {target_language}")
+        if existing_summaries:
+            logger.info("Processing existing summaries for translation")
+            
+        # Handle translation of existing summaries
+        if existing_summaries and target_language:
+            try:
+                import json
+                existing_data = json.loads(existing_summaries)
+                logger.info(f"Translating {len(existing_data)} existing summaries to {target_language}")
+                tasks = []
+                
+                for summary in existing_data:
+                    if "summaries" in summary and "original" in summary["summaries"]:
+                        original_text = summary["summaries"]["original"]
+                        # Only translate if not already translated
+                        if target_language not in summary["summaries"]:
+                            tasks.append(translate_text(original_text, target_language))
+                        else:
+                            tasks.append(None)
+                
+                if tasks:
+                    translations = await asyncio.gather(*tasks, return_exceptions=True)
+                    for summary, translation in zip(existing_data, translations):
+                        if translation and not isinstance(translation, Exception):
+                            summary["summaries"][target_language] = translation
+                        elif isinstance(translation, Exception):
+                            logger.error(f"Translation failed: {str(translation)}")
+                    
+                    logger.info("Translation of existing summaries completed")
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "successful_files": existing_data,
+                            "failed_files": []
+                        }
+                    )
+
+        # Handle new file uploads
         tasks = []
         for file in files:
             if not file.filename.lower().endswith('.pdf'):
@@ -164,6 +195,7 @@ async def upload_files(
 
         for file, result in zip(files, results):
             if isinstance(result, Exception):
+                logger.error(f"Error processing {file.filename}: {str(result)}")
                 failed.append({
                     "filename": file.filename,
                     "error": str(result)

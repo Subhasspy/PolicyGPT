@@ -141,20 +141,43 @@ export class UploadService {
     });
   }
 
-  uploadMultipleFiles(files: File[], targetLanguage?: string) {
+  uploadMultipleFiles(files: File[], targetLanguage?: string, existingSummaries?: any[]) {
+    console.log('Starting upload/translation request:', { files, targetLanguage, existingSummaries });
+    
     const formData = new FormData();
     
-    files.forEach(file => {
-      formData.append('files', file);
-    });
+    if (files.length > 0) {
+      files.forEach(file => {
+        formData.append('files', file);
+      });
+    }
 
     if (targetLanguage) {
       formData.append('target_language', targetLanguage);
     }
 
+    if (existingSummaries && existingSummaries.length > 0) {
+      // Add existing summaries as a separate form field
+      const summariesString = JSON.stringify(existingSummaries);
+      formData.append('existing_summaries', summariesString);
+      console.log('Sending summaries for translation:', summariesString);
+    }
+
+    // Log the complete form data for debugging
+    formData.forEach((value, key) => {
+      console.log(`FormData entry - ${key}:`, value);
+    });
+
     return this.http.post(`${this.apiUrl}/upload`, formData, {
       reportProgress: true,
       observe: 'events'
-    });
+    }).pipe(
+      tap(event => {
+        if (event.type === HttpEventType.Response) {
+          console.log('Server response:', event.body);
+        }
+      }),
+      catchError(this.handleError)
+    );
   }
 }

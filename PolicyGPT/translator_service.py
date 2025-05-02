@@ -29,9 +29,12 @@ translation_cache = {}
 async def translate_text(text: str, target_language: str) -> str:
     """Translate text using Azure Translator with caching"""
     try:
+        logger.info(f"Translation requested for language: {target_language}")
+        
         # Check cache first
         cache_key = _cache_key(text, target_language)
         if cache_key in translation_cache:
+            logger.info("Translation found in cache")
             return translation_cache[cache_key]
 
         subscription_key = TRANSLATOR_CONFIG["subscription_key"]
@@ -39,6 +42,7 @@ async def translate_text(text: str, target_language: str) -> str:
         location = TRANSLATOR_CONFIG["location"]
 
         if not all([subscription_key, endpoint, location]):
+            logger.error("Azure Translator credentials not configured")
             raise ValueError("Azure Translator credentials not configured")
 
         path = '/translate'
@@ -61,6 +65,7 @@ async def translate_text(text: str, target_language: str) -> str:
             'text': text
         }]
 
+        logger.info(f"Sending translation request to Azure for language: {target_language}")
         session = await get_session()
         async with session.post(
             constructed_url, 
@@ -72,20 +77,30 @@ async def translate_text(text: str, target_language: str) -> str:
         ) as response:
             response.raise_for_status()
             result = await response.json()
+            logger.info(f"Received response from Azure: {result}")
             
             if result and len(result) > 0:
                 translations = result[0].get('translations', [])
                 if translations and len(translations) > 0:
                     translated_text = translations[0].get('text', '')
-                    # Cache the result
-                    translation_cache[cache_key] = translated_text
-                    return translated_text
+                    if translated_text:
+                        # Cache the result
+                        translation_cache[cache_key] = translated_text
+                        logger.info("Translation successful and cached")
+                        return translated_text
+                    else:
+                        logger.error("Empty translation received")
+                        raise ValueError("Empty translation received from Azure")
             
+            logger.error("No translation found in the response")
             raise ValueError("No translation found in the response")
 
     except Exception as e:
         logger.error(f"Error translating text: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to translate text: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to translate text: {str(e)}"
+        )
 
 async def cleanup():
     """Cleanup resources"""

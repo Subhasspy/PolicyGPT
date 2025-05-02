@@ -152,4 +152,61 @@ export class DocumentUploadComponent {
       this.isProcessing = false;
     }
   }
+
+  onLanguageChange(): void {
+    console.log('Language changed to:', this.selectedLanguage);
+    
+    if (!this.uploadResults.length || !this.selectedLanguage) {
+      return;
+    }
+
+    const needsTranslation = this.uploadResults.some(
+      result => !result.summaries[this.selectedLanguage]
+    );
+
+    if (needsTranslation) {
+      console.log('Requesting translation for language:', this.selectedLanguage);
+      this.isProcessing = true;
+      this.errorMessage = '';
+
+      // Create a deep copy of the results to send for translation
+      const summariesToTranslate = this.uploadResults.map(result => ({
+        filename: result.filename,
+        summaries: { ...result.summaries }
+      }));
+      
+      this.uploadService.uploadMultipleFiles([], this.selectedLanguage, summariesToTranslate)
+        .subscribe({
+          next: (event: any) => {
+            if (event.type === HttpEventType.Response) {
+              console.log('Translation response received:', event.body);
+              
+              if (event.body?.successful_files?.length > 0) {
+                // Update the results with new translations
+                this.uploadResults = event.body.successful_files;
+                console.log('Updated results with translations:', this.uploadResults);
+              } else {
+                this.errorMessage = 'No translation results received';
+              }
+              
+              if (event.body?.failed_files?.length > 0) {
+                this.errorMessage = `Failed to translate ${event.body.failed_files.length} file(s). Please try again.`;
+                console.error('Translation failures:', event.body.failed_files);
+              }
+            }
+          },
+          error: (error) => {
+            console.error('Translation error:', error);
+            this.errorMessage = error.message || 'Translation failed. Please try again.';
+            this.isProcessing = false;
+          },
+          complete: () => {
+            console.log('Translation request complete');
+            this.isProcessing = false;
+          }
+        });
+    } else {
+      console.log('Translation already exists for:', this.selectedLanguage);
+    }
+  }
 }
