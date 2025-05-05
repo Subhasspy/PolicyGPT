@@ -1,14 +1,14 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpEvent, HttpEventType, HttpResponse, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { map, catchError, retry, tap } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export interface DocumentSummary {
   fileName: string;
   summaries: {
     original: string;
-    [key: string]: string;  // For translated summaries with language code as key
+    [key: string]: string;
   };
 }
 
@@ -17,12 +17,26 @@ export interface UploadOptions {
   customPrompt?: string;
 }
 
+interface UploadResponse {
+  results: Array<{
+    filename: string;
+    summaries: {
+      original: string;
+      [key: string]: string;
+    };
+    error?: string;
+  }>;
+  metadata: {
+    processing_timestamp: string;
+    total_files_processed: number;
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class UploadService {
   private apiUrl = environment.apiUrl;
-  private baseUrl = `${this.apiUrl}/upload`;
 
   constructor(private http: HttpClient) { }
 
@@ -37,147 +51,32 @@ export class UploadService {
       errorMessage = error.error?.detail || 'Bad request. Please check your input.';
     } else if (error.error instanceof ErrorEvent) {
       errorMessage = `Client-side error: ${error.error.message}`;
+    } else if (error.error?.error) {
+      // Handle structured error responses from the backend
+      errorMessage = error.error.error;
     } else {
-      errorMessage = `Server error: ${error.status}. ${error.message}`;
+      errorMessage = `Server error: ${error.status}. ${error.error?.message || error.message}`;
     }
     
     console.error('Upload error:', error);
     return throwError(() => errorMessage);
   }
 
-  uploadDocument(file: File, options: UploadOptions): Observable<{ progress: number; summary?: DocumentSummary }> {
-    const formData = new FormData();
-    formData.append('files', file);
-    
-    if (options.customPrompt) {
-      formData.append('custom_prompt', options.customPrompt);
-    }
-    
-    let params = new HttpParams();
-    if (options.targetLanguage) {
-      params = params.set('target_language', options.targetLanguage);
-    }
-    
-    // Log request details
-    console.log('Request Details:', {
-      url: `${this.baseUrl}${params.toString() ? '?' + params.toString() : ''}`,
-      params: params.toString(),
-      body: {
-        file: {
-          name: file.name,
-          type: file.type,
-          size: file.size
-        },
-        options
-      }
-    });
-
-    return this.http.post(this.baseUrl, formData, {
-      params,
-      reportProgress: true,
-      observe: 'events'
-    }).pipe(
-      tap(event => {
-        if (event.type === HttpEventType.Response) {
-          console.log('Response received:', {
-            status: event.status,
-            statusText: event.statusText,
-            headers: event.headers,
-            body: event.body
-          });
-        }
-      }),
-      retry(1),
-      map((event: HttpEvent<any>) => {
-        switch (event.type) {
-          case HttpEventType.UploadProgress:
-            if (event.total) {
-              return { progress: Math.round(100 * (event.loaded / event.total)) };
-            }
-            return { progress: 0 };
-          case HttpEventType.Response:
-            if (event instanceof HttpResponse) {
-              const responseData = event.body;
-              if (responseData.successful_files && responseData.successful_files.length > 0) {
-                const fileResult = responseData.successful_files[0];
-                return {
-                  progress: 100,
-                  summary: {
-                    fileName: fileResult.filename,
-                    summaries: fileResult.summaries
-                  }
-                };
-              }
-              // Handle failed uploads
-              if (responseData.failed_files && responseData.failed_files.length > 0) {
-                throw new Error(responseData.failed_files[0].error);
-              }
-            }
-            return { progress: 100 };
-          default:
-            return { progress: 0 };
-        }
-      }),
-      catchError(this.handleError)
-    );
+  uploadFiles(formData: FormData): Observable<UploadResponse> {
+    return this.http.post<UploadResponse>(`${this.apiUrl}/upload`, formData)
+      .pipe(
+        catchError(this.handleError)
+      );
   }
 
-  uploadFiles(formData: FormData, onProgress: (progress: number) => void) {
-    return new Promise((resolve, reject) => {
-      this.http.post(`${this.apiUrl}/upload`, formData, {
-        reportProgress: true,
-        observe: 'events'
-      }).subscribe({
-        next: (event: any) => {
-          if (event.type === HttpEventType.UploadProgress) {
-            const progress = Math.round((100 * event.loaded) / event.total);
-            onProgress(progress);
-          } else if (event.type === HttpEventType.Response) {
-            resolve(event.body);
-          }
-        },
-        error: (error) => reject(error)
-      });
-    });
+  getSupportedLanguages(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/languages`);
   }
 
-  uploadMultipleFiles(files: File[], targetLanguage?: string, existingSummaries?: any[]) {
-    console.log('Starting upload/translation request:', { files, targetLanguage, existingSummaries });
-    
+  submitFeedback(feedback: { summary_id: string; feedback_type: string }): Observable<any> {
     const formData = new FormData();
-    
-    if (files.length > 0) {
-      files.forEach(file => {
-        formData.append('files', file);
-      });
-    }
-
-    if (targetLanguage) {
-      formData.append('target_language', targetLanguage);
-    }
-
-    if (existingSummaries && existingSummaries.length > 0) {
-      // Add existing summaries as a separate form field
-      const summariesString = JSON.stringify(existingSummaries);
-      formData.append('existing_summaries', summariesString);
-      console.log('Sending summaries for translation:', summariesString);
-    }
-
-    // Log the complete form data for debugging
-    formData.forEach((value, key) => {
-      console.log(`FormData entry - ${key}:`, value);
-    });
-
-    return this.http.post(`${this.apiUrl}/upload`, formData, {
-      reportProgress: true,
-      observe: 'events'
-    }).pipe(
-      tap(event => {
-        if (event.type === HttpEventType.Response) {
-          console.log('Server response:', event.body);
-        }
-      }),
-      catchError(this.handleError)
-    );
+    formData.append('summary_id', feedback.summary_id);
+    formData.append('feedback_type', feedback.feedback_type);
+    return this.http.post(`${this.apiUrl}/feedback`, formData);
   }
 }

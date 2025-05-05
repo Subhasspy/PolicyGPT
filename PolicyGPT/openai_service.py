@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from openai import AzureOpenAI
 import logging
 import os
-from config import OPENAI_CONFIG, DEFAULT_PROMPTS
+from config import OPENAI_CONFIG, STANDARD_PROMPT
 import asyncio
 from functools import lru_cache
 import hashlib
@@ -24,23 +24,26 @@ api_semaphore = asyncio.Semaphore(MAX_CONCURRENT_CALLS)
 summary_cache = {}
 
 @lru_cache(maxsize=1000)
-def _cache_key(text: str, document_type: str, custom_prompt: str = None) -> str:
+def _cache_key(text: str, custom_prompt: str = None) -> str:
     """Create a cache key for summary"""
-    key_string = f"{text}:{document_type}:{custom_prompt or ''}"
+    components = [text]
+    if custom_prompt:
+        components.append(custom_prompt)
+    key_string = "_".join(components)
     return hashlib.md5(key_string.encode()).hexdigest()
 
-async def summarize_text(text: str, document_type: str = "general", custom_prompt: str = None) -> str:
+async def summarize_text(text: str, custom_prompt: str = None) -> str:
     """
-    Summarize text using Azure OpenAI with caching and rate limiting
+    Summarize text using Azure OpenAI
     """
     try:
         # Check cache first
-        cache_key = _cache_key(text, document_type, custom_prompt)
+        cache_key = _cache_key(text, custom_prompt)
         if cache_key in summary_cache:
             return summary_cache[cache_key]
 
-        # Get the appropriate prompt
-        system_prompt = custom_prompt if custom_prompt else DEFAULT_PROMPTS.get(document_type, DEFAULT_PROMPTS["general"])
+        # Use custom prompt if provided, otherwise use standard prompt
+        system_prompt = custom_prompt if custom_prompt else STANDARD_PROMPT
 
         # Use semaphore to limit concurrent API calls
         async with api_semaphore:
@@ -57,7 +60,7 @@ async def summarize_text(text: str, document_type: str = "general", custom_promp
                     temperature=0.7
                 )
             )
-            
+
             summary = response.choices[0].message.content
             # Format summary as markdown
             summary = f"### Summary\n\n{summary}"
@@ -69,20 +72,11 @@ async def summarize_text(text: str, document_type: str = "general", custom_promp
         logger.error(f"Error summarizing text with Azure OpenAI: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to summarize text: {str(e)}")
 
-async def summarize_multiple_texts(texts: list[tuple[str, str]], document_type: str = "general", custom_prompt: str = None) -> list[str]:
+async def summarize_multiple_texts(texts: list[tuple[str, str]], custom_prompt: str = None) -> list[str]:
     """
     Summarize multiple texts concurrently using Azure OpenAI
     """
-    try:
-        # Create tasks for each text
-        tasks = [summarize_text(text, document_type, custom_prompt) for text, _ in texts]
-        
-        # Process all texts concurrently
-        summaries = await asyncio.gather(*tasks)
-        
-        # Return list of summaries
-        return summaries
-
-    except Exception as e:
-        logger.error(f"Error processing multiple texts: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process texts: {str(e)}")
+    tasks = []
+    for filename, text in texts:
+        tasks.append(summarize_text(text, custom_prompt))
+    return await asyncio.gather(*tasks)

@@ -1,13 +1,12 @@
 # PolicyGPT
 
-PolicyGPT is a full-stack application that helps users analyze and translate PDF documents, particularly focusing on policy documents, using Azure OpenAI and Azure Translator services. The application provides automated summarization and multi-language translation capabilities.
+PolicyGPT is a full-stack application that helps users analyze and translate PDF documents using Azure OpenAI and Azure Translator services. The application provides automated summarization and multi-language translation capabilities.
 
 ## Features
 
 - PDF document upload and processing
 - Automated document summarization using Azure OpenAI
 - Multi-language translation support for summaries
-- Support for various document types (policy, technical, legal, financial)
 - Real-time progress tracking
 - Concurrent file processing
 - Responsive web interface
@@ -95,42 +94,16 @@ The frontend will be available at http://localhost:4200
 
 - `GET /`: Health check endpoint
 - `GET /languages`: Get supported translation languages
-- `GET /document-types`: Get available document types and their prompts
 - `POST /upload`: Upload and process PDF files
   - Supports multiple file uploads
   - Optional translation to target language
-  - Custom document type selection
-  - Custom prompt override
-
-## Project Structure
-
-```
-PolicyGPT/
-├── frontend/               # Angular frontend application
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── components/
-│   │   │   ├── services/
-│   │   │   └── document-upload/
-│   │   └── ...
-│   └── ...
-└── PolicyGPT/             # Python backend application
-    ├── main.py            # FastAPI application
-    ├── config.py          # Configuration settings
-    ├── openai_service.py  # Azure OpenAI integration
-    ├── pdf_service.py     # PDF processing service
-    ├── translator_service.py # Azure Translator integration
-    └── requirements.txt    # Python dependencies
-```
+  - Optional custom prompt override
+- `POST /feedback`: Submit feedback for summaries
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.

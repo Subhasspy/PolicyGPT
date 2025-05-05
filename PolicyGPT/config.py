@@ -22,14 +22,15 @@ TRANSLATOR_CONFIG = {
     "location": os.getenv("AZURE_TRANSLATOR_REGION")
 }
 
-# Default prompts for different document types
-DEFAULT_PROMPTS = {
-    "general": "Provide a clear, concise summary of the main points.",
-    "policy": "Analyze this policy document and highlight key coverage details, terms, conditions, and important exclusions.",
-    "technical": "Break down the technical content into main concepts and explain them clearly.",
-    "legal": "Analyze this legal document and highlight key legal terms, obligations, and important clauses.",
-    "financial": "Summarize the financial information, highlighting key figures, trends, and important financial terms."
+# Azure Blob Storage Configuration
+AZURE_STORAGE_CONFIG = {
+    "connection_string": os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
+    "container_name": os.getenv("AZURE_STORAGE_CONTAINER_NAME", "temp-uploads"),
+    "expiry_hours": int(os.getenv("AZURE_STORAGE_EXPIRY_HOURS", "24"))  # Default 24 hours expiry
 }
+
+# Standard prompt for document summarization
+STANDARD_PROMPT = "Analyze this document and provide a clear, comprehensive summary that highlights the main points, key findings, and important details. Structure the summary in a well-organized format using markdown."
 
 # Supported languages dictionary
 SUPPORTED_LANGUAGES = {

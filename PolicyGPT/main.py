@@ -1,15 +1,16 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import os
 import logging
-import aiofiles
 from typing import List, Optional
 import asyncio
-from config import UPLOAD_FOLDER, SUPPORTED_LANGUAGES, DEFAULT_PROMPTS
+from config import SUPPORTED_LANGUAGES
 from pdf_service import extract_text_from_pdf
 from translator_service import translate_text, cleanup
 from openai_service import summarize_text
+from storage_service import storage_service
+import json
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,9 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create upload directory if it doesn't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup resources on shutdown"""
@@ -36,182 +34,127 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """Health check endpoint"""
-    return {"status": "Server is running"}
+    return {"status": "healthy"}
 
 @app.get("/languages")
 async def get_supported_languages():
     """Get list of supported languages for translation"""
-    # Group languages by region for better organization
-    grouped_languages = {
-        "Indian Languages": {k: v for k, v in SUPPORTED_LANGUAGES.items() 
-                           if k in ["hi", "bn", "te", "ta", "mr", "gu", "kn", "ml", "pa", "ur", "or"]},
-        "Other Languages": {k: v for k, v in SUPPORTED_LANGUAGES.items() 
-                          if k not in ["hi", "bn", "te", "ta", "mr", "gu", "kn", "ml", "pa", "ur", "or"]}
-    }
-    
-    return JSONResponse(
-        status_code=200,
-        content={
-            "supported_languages": SUPPORTED_LANGUAGES,
-            "grouped_languages": grouped_languages,
-            "examples": {
-                "Tamil Translation": "Use target_language=ta",
-                "Hindi Translation": "Use target_language=hi",
-                "Telugu Translation": "Use target_language=te"
-            }
-        }
-    )
-
-@app.get("/document-types")
-async def get_document_types():
-    """Get available document types and their default prompts"""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "available_document_types": list(DEFAULT_PROMPTS.keys()),
-            "default_prompts": DEFAULT_PROMPTS
-        }
-    )
+    return {"supported_languages": SUPPORTED_LANGUAGES}
 
 async def process_single_file(
     file: UploadFile, 
     target_language: Optional[str],
-    document_type: str,
     custom_prompt: Optional[str]
 ):
-    """Process a single PDF file with custom prompt"""
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    """Process a single PDF file"""
     try:
-        # Save uploaded file
-        async with aiofiles.open(file_path, 'wb') as f:
-            content = await file.read()
-            await f.write(content)
-
-        # Extract text from PDF and get summary concurrently
-        extracted_data = await extract_text_from_pdf(file_path)
+        # Extract text from PDF
+        pdf_text = await extract_text_from_pdf(file)
         
-        # Get summary using OpenAI
-        summary = await summarize_text(
-            extracted_data["text"],
-            document_type=document_type,
-            custom_prompt=custom_prompt
-        )
-
-        # Initialize response
+        # Generate summary using standard prompt
+        summary = await summarize_text(pdf_text, custom_prompt)
+        
         result = {
             "filename": file.filename,
             "summaries": {
                 "original": summary
             }
         }
-
-        # Add translated summary if target language is provided
-        if target_language and target_language != "en":
-            try:
-                translated = await translate_text(summary, target_language)
-                result["summaries"][target_language] = translated
-            except Exception as e:
-                logger.error(f"Translation failed but continuing with original summary: {e}")
-
+        
+        # Translate if target language is specified
+        if target_language and target_language in SUPPORTED_LANGUAGES:
+            translated_summary = await translate_text(summary, target_language)
+            result["summaries"][target_language] = translated_summary
+        
         return result
-
     except Exception as e:
-        logger.error(f"Error processing file {file.filename}: {e}")
-        return {"filename": file.filename, "error": str(e)}
-    finally:
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            logger.error(f"Error removing temporary file {file_path}: {e}")
+        logger.error(f"Error processing file {file.filename}: {str(e)}")
+        return {
+            "filename": file.filename,
+            "error": str(e)
+        }
 
 @app.post("/upload")
 async def upload_files(
-    files: List[UploadFile] = File(default=[]),
+    files: List[UploadFile] = File(...), 
     target_language: Optional[str] = Form(None),
-    document_type: str = Form(default="general"),
-    custom_prompt: Optional[str] = Form(None),
-    existing_summaries: Optional[str] = Form(None)
+    custom_prompt: Optional[str] = Form(None)
 ):
-    """Upload and process multiple PDF files concurrently"""
+    """Process multiple PDF files"""
     try:
-        logger.info(f"Received upload request - files: {len(files)}, target_language: {target_language}")
-        if existing_summaries:
-            logger.info("Processing existing summaries for translation")
-            
-        # Handle translation of existing summaries
-        if existing_summaries and target_language:
-            try:
-                import json
-                existing_data = json.loads(existing_summaries)
-                logger.info(f"Translating {len(existing_data)} existing summaries to {target_language}")
-                tasks = []
-                
-                for summary in existing_data:
-                    if "summaries" in summary and "original" in summary["summaries"]:
-                        original_text = summary["summaries"]["original"]
-                        # Only translate if not already translated
-                        if target_language not in summary["summaries"]:
-                            tasks.append(translate_text(original_text, target_language))
-                        else:
-                            tasks.append(None)
-                
-                if tasks:
-                    translations = await asyncio.gather(*tasks, return_exceptions=True)
-                    for summary, translation in zip(existing_data, translations):
-                        if translation and not isinstance(translation, Exception):
-                            summary["summaries"][target_language] = translation
-                        elif isinstance(translation, Exception):
-                            logger.error(f"Translation failed: {str(translation)}")
-                    
-                    logger.info("Translation of existing summaries completed")
-                    return JSONResponse(
-                        status_code=200,
-                        content={
-                            "successful_files": existing_data,
-                            "failed_files": []
-                        }
-                    )
-
-        # Handle new file uploads
-        tasks = []
+        results = []
         for file in files:
-            if not file.filename.lower().endswith('.pdf'):
-                continue
-            
-            task = process_single_file(
-                file, 
-                target_language,
-                document_type,
-                custom_prompt
-            )
-            tasks.append(task)
-
-        # Process all files concurrently
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        successful = []
-        failed = []
-
-        for file, result in zip(files, results):
-            if isinstance(result, Exception):
-                logger.error(f"Error processing {file.filename}: {str(result)}")
-                failed.append({
+            try:
+                if not file.filename.lower().endswith('.pdf'):
+                    results.append({
+                        "filename": file.filename,
+                        "error": "Only PDF files are supported"
+                    })
+                    continue
+                    
+                # Extract text from PDF
+                text = await extract_text_from_pdf(file)
+                
+                # Generate summary using standard prompt
+                summary = await summarize_text(text, custom_prompt)
+                
+                result = {
                     "filename": file.filename,
-                    "error": str(result)
+                    "summaries": {
+                        "original": summary
+                    }
+                }
+                
+                # Translate if target language is specified
+                if target_language and target_language in SUPPORTED_LANGUAGES:
+                    translated_summary = await translate_text(summary, target_language)
+                    result["summaries"][target_language] = translated_summary
+                
+                results.append(result)
+                
+            except Exception as e:
+                logger.error(f"Error processing file {file.filename}: {str(e)}")
+                results.append({
+                    "filename": file.filename,
+                    "error": str(e)
                 })
-            elif "error" in result:
-                failed.append(result)
-            else:
-                successful.append(result)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "successful_files": successful,
-                "failed_files": failed
+        
+        return {
+            "results": results,
+            "metadata": {
+                "processing_timestamp": datetime.now().isoformat(),
+                "total_files_processed": len(files)
             }
-        )
+        }
+        
     except Exception as e:
-        logger.error(f"Error processing files: {e}")
+        logger.error(f"Upload error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+@app.post("/feedback")
+async def submit_feedback(
+    summary_id: str = Form(...),
+    feedback_type: str = Form(...),
+    feedback_text: Optional[str] = Form(None),
+    suggested_improvements: Optional[str] = Form(None)
+):
+    """Submit feedback for a summary"""
+    try:
+        feedback = {
+            "summary_id": summary_id,
+            "feedback_type": feedback_type,
+            "feedback_text": feedback_text,
+            "suggested_improvements": suggested_improvements,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Store feedback (you could implement proper storage here)
+        logger.info(f"Received feedback: {json.dumps(feedback, indent=2)}")
+        return {"status": "success", "message": "Feedback submitted successfully"}
+
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
