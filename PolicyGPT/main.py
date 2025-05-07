@@ -7,7 +7,7 @@ import asyncio
 from config import SUPPORTED_LANGUAGES
 from pdf_service import extract_text_from_pdf
 from translator_service import translate_text, cleanup
-from openai_service import summarize_text
+from openai_service import summarize_text, refine_summary_with_feedback
 from storage_service import storage_service
 import json
 from datetime import datetime
@@ -91,18 +91,19 @@ async def upload_files(
                         "error": "Only PDF files are supported"
                     })
                     continue
-                    
-                # Extract text from PDF
-                text = await extract_text_from_pdf(file)
+
+                # Get the text content and store it for potential refinement
+                file_content = await extract_text_from_pdf(file)
                 
-                # Generate summary using standard prompt
-                summary = await summarize_text(text, custom_prompt)
+                # Generate summary
+                summary = await summarize_text(file_content, custom_prompt)
                 
                 result = {
                     "filename": file.filename,
                     "summaries": {
                         "original": summary
-                    }
+                    },
+                    "originalText": file_content  # Store original text for refinement
                 }
                 
                 # Translate if target language is specified
@@ -113,7 +114,7 @@ async def upload_files(
                 results.append(result)
                 
             except Exception as e:
-                logger.error(f"Error processing file {file.filename}: {str(e)}")
+                logger.error(f"Error processing {file.filename}: {str(e)}")
                 results.append({
                     "filename": file.filename,
                     "error": str(e)
@@ -139,22 +140,61 @@ async def submit_feedback(
     summary_id: str = Form(...),
     feedback_type: str = Form(...),
     feedback_text: Optional[str] = Form(None),
-    suggested_improvements: Optional[str] = Form(None)
+    original_text: Optional[str] = Form(None),
+    original_summary: Optional[str] = Form(None)
 ):
-    """Submit feedback for a summary"""
+    """Submit feedback for a summary and get refined version if needed"""
     try:
         feedback = {
             "summary_id": summary_id,
             "feedback_type": feedback_type,
             "feedback_text": feedback_text,
-            "suggested_improvements": suggested_improvements,
             "timestamp": datetime.now().isoformat()
         }
         
-        # Store feedback (you could implement proper storage here)
         logger.info(f"Received feedback: {json.dumps(feedback, indent=2)}")
-        return {"status": "success", "message": "Feedback submitted successfully"}
+
+        # Only refine if we have the original text and feedback type is unclear or inaccurate
+        if original_text and feedback_type in ["unclear", "inaccurate"]:
+            refined_summary = await refine_summary_with_feedback(
+                original_text, 
+                original_summary, 
+                feedback_type, 
+                feedback_text
+            )
+            return {
+                "status": "success", 
+                "message": "Summary has been refined based on your feedback",
+                "summaries": {
+                    "original": refined_summary  # Override original with refined
+                }
+            }
+        
+        return {
+            "status": "success", 
+            "message": "Feedback submitted successfully"
+        }
 
     except Exception as e:
-        logger.error(f"Error submitting feedback: {str(e)}")
+        logger.error(f"Error processing feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/translate")
+async def translate_text_endpoint(
+    text: str = Form(...),
+    target_language: str = Form(...)
+):
+    """Translate text to the target language"""
+    try:
+        if target_language not in SUPPORTED_LANGUAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Language {target_language} is not supported. Supported languages: {', '.join(SUPPORTED_LANGUAGES.keys())}"
+            )
+            
+        translated_text = await translate_text(text, target_language)
+        return {"translated_text": translated_text}
+        
+    except Exception as e:
+        logger.error(f"Translation error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
