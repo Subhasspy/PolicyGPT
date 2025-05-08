@@ -14,6 +14,37 @@ PolicyGPT is a full-stack application that helps users analyze and translate ins
 - Responsive web interface
 - Large document handling with automatic chunking and recursive summarization
 
+## Project Structure
+
+```
+PolicyGPT/
+├── backend/                  # Backend Python application
+│   ├── models/               # Data models directory
+│   ├── __pycache__/          # Python cache files
+│   ├── .env                  # Environment variables (not in repo)
+│   ├── .env.example          # Example environment variables
+│   ├── config.py             # Configuration settings
+│   ├── main.py               # Main FastAPI application
+│   ├── openai_service.py     # OpenAI integration service
+│   ├── pdf_service.py        # PDF processing service
+│   ├── requirements.txt      # Python dependencies
+│   ├── run.py                # Application entry point
+│   └── translator_service.py # Translation service
+│
+├── frontend/                 # Angular frontend application
+│   ├── src/                  # Source code
+│   │   ├── app/              # Angular components
+│   │   ├── assets/           # Static assets
+│   │   └── environments/     # Environment configurations
+│   ├── angular.json          # Angular configuration
+│   ├── package.json          # NPM dependencies
+│   └── tsconfig.json         # TypeScript configuration
+│
+├── .gitignore                # Git ignore file
+├── PolicyGPT_Architecture.md # Architecture documentation
+└── README.md                 # This file
+```
+
 ## Tech Stack
 
 ### Frontend (Angular)
@@ -54,13 +85,13 @@ cd PolicyGPT
 
 2. Set up the backend:
 ```bash
-cd PolicyGPT
+cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the PolicyGPT directory with your Azure credentials:
+3. Create a `.env` file in the backend directory with your Azure credentials:
 ```env
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_API_BASE=your_openai_endpoint
@@ -80,7 +111,7 @@ npm install
 
 1. Start the backend server:
 ```bash
-cd PolicyGPT
+cd backend
 python run.py
 ```
 The backend will start on http://localhost:8002
