@@ -83,7 +83,7 @@ npm install
 cd PolicyGPT
 python run.py
 ```
-The backend will start on http://localhost:8000
+The backend will start on http://localhost:8002
 
 2. Start the frontend development server:
 ```bash
@@ -108,10 +108,3 @@ The frontend will be available at http://localhost:4200
   - Refines summaries based on user feedback for unclear/inaccurate ratings
 - `POST /translate`: Translate text to a supported language
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License.
