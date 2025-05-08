@@ -108,6 +108,3 @@ The frontend will be available at http://localhost:4200
   - Refines summaries based on user feedback for unclear/inaccurate ratings
 - `POST /translate`: Translate text to a supported language
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
