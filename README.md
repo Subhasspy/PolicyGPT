@@ -83,7 +83,7 @@ npm install
 cd PolicyGPT
 python run.py
 ```
-The backend will start on http://localhost:8000
+The backend will start on http://localhost:8002
 
 2. Start the frontend development server:
 ```bash
