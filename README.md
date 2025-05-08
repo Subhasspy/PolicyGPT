@@ -111,7 +111,3 @@ The frontend will be available at http://localhost:4200
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License.
