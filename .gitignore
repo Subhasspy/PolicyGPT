@@ -32,9 +32,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# Uploaded Files
-uploads/*
-!uploads/.gitkeep
+# PDF Files
 *.pdf
 *.PDF
 

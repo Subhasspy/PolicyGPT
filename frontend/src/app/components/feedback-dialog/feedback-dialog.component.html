@@ -1,0 +1,26 @@
+<div class="feedback-dialog-overlay" *ngIf="isOpen">
+  <div class="feedback-dialog">
+    <div class="feedback-dialog-header">
+      <h3>{{ getFeedbackTitle() }}</h3>
+      <button class="close-btn" (click)="closeDialog()">×</button>
+    </div>
+    <div class="feedback-dialog-body">
+      <textarea 
+        #feedbackTextarea
+        [(ngModel)]="feedbackText" 
+        placeholder="{{ getFeedbackPlaceholder() }}"
+        rows="5"
+      ></textarea>
+    </div>
+    <div class="feedback-dialog-footer">
+      <button class="cancel-btn" (click)="closeDialog()">Cancel</button>
+      <button 
+        class="submit-btn" 
+        [disabled]="!feedbackText.trim()" 
+        (click)="submitFeedback()"
+      >
+        Submit Feedback
+      </button>
+    </div>
+  </div>
+</div>

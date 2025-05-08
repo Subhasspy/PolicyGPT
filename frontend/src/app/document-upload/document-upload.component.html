@@ -4,18 +4,18 @@
             <h2>Upload Documents</h2>
             <div class="upload-form">
                 <!-- File Input Container -->
-                <div class="file-input-container" 
+                <div class="file-input-container"
                      [class.drag-over]="isDragging"
                      (dragover)="onDragOver($event)"
                      (dragleave)="onDragLeave($event)"
                      (drop)="onDrop($event)"
                      (click)="openFileSelector()">
-                    <input type="file" 
-                           multiple 
-                           (change)="onFileSelected($event)" 
+                    <input type="file"
+                           multiple
+                           (change)="onFileSelected($event)"
                            accept=".pdf"
                            #fileInput />
-                    
+
                     <div class="upload-icon">📄</div>
                     <div class="file-input-text">
                         Drag and drop your files here
@@ -33,26 +33,71 @@
                     </div>
                 </div>
 
-                <!-- Language Selector -->
+                <!-- Options Section -->
                 <div class="options-section">
+                    <!-- Language Selector -->
                     <div class="language-selector">
-                        <select [(ngModel)]="selectedLanguage">
+                        <label for="language-select">Translation Language:</label>
+                        <select id="language-select" [(ngModel)]="selectedLanguage">
                             <option value="">Original Language</option>
                             <option *ngFor="let lang of languages" [value]="lang.code">
                                 {{lang.name}}
                             </option>
                         </select>
                     </div>
+
+                    
+                </div>
+
+                <!-- Personalization Options Panel -->
+                <div class="personalization-panel">
+                    <h3>Personalization Options</h3>
+                    <!-- Reading Level -->
+                    <div class="personalization-option">
+                        <label for="reading-level">Policy knowledge Level:</label>
+                        <select id="reading-level" [(ngModel)]="readingLevel">
+                            <option *ngFor="let level of readingLevels" [value]="level.code">
+                                {{level.name}}
+                            </option>
+                        </select>
+                    </div>
+
+
+
+                    <!-- Interests -->
+                    <div class="personalization-option">
+                        <label>Interests:</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item" *ngFor="let interest of customerInterests">
+                                <input type="checkbox"
+                                       [id]="'interest-' + interest.code"
+                                       [value]="interest.code"
+                                       (change)="updateInterests(interest.code, $event)">
+                                <label [for]="'interest-' + interest.code">{{interest.name}}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Optional User Info -->
+                    <div class="personalization-option">
+                        <label for="age-group">Age Group (Optional):</label>
+                        <select id="age-group" [(ngModel)]="ageGroup">
+                            <option value="">Select age group</option>
+                            <option *ngFor="let group of ageGroups" [value]="group.code">
+                                {{group.name}}
+                            </option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="button-group">
-                    <button class="primary" 
-                            (click)="uploadFiles()" 
+                    <button class="primary"
+                            (click)="uploadFiles()"
                             [disabled]="!selectedFiles.length || isProcessing">
                         {{isProcessing ? 'Processing...' : 'Analyze Documents'}}
                     </button>
-                    <button class="secondary" 
-                            (click)="clearFiles()" 
+                    <button class="secondary"
+                            (click)="clearFiles()"
                             *ngIf="selectedFiles.length">
                         Clear Files
                     </button>
@@ -93,9 +138,12 @@
                         <h3>{{result.filename}}</h3>
                     </div>
                     <div class="summary-content">
-                        <!-- Original Summary -->
+                        <!-- Summary (Original or Personalized) -->
                         <div class="summary-item">
-                            <div class="summary-label">Summary</div>
+                            <div class="summary-label">
+                                <span>Summary</span>
+                                <span class="personalized-badge" *ngIf="result.personalized">Personalized</span>
+                            </div>
                             <div class="summary-value">
                                 <markdown [data]="result.summaries.original"></markdown>
                             </div>
@@ -103,7 +151,10 @@
 
                         <!-- Translated Summary if available -->
                         <div class="summary-item" *ngIf="result.summaries[selectedLanguage]">
-                            <div class="summary-label">Translated Summary</div>
+                            <div class="summary-label">
+                                <span>Translated Summary</span>
+                                <span class="personalized-badge" *ngIf="result.personalized">Personalized</span>
+                            </div>
                             <div class="summary-value">
                                 <markdown [data]="result.summaries[selectedLanguage]"></markdown>
                             </div>
@@ -111,27 +162,36 @@
 
                         <!-- Feedback Section -->
                         <div class="feedback-section">
+                            <div class="feedback-header">
+                                <h4>How was this summary?</h4>
+                                <div class="feedback-hint">
+                                    Clicking "Unclear" or "Inaccurate" will refine the summary based on your feedback.
+                                </div>
+                            </div>
                             <div class="feedback-buttons">
-                                <button class="feedback-btn" 
+                                <button class="feedback-btn"
                                         [class.active]="isFeedbackSubmitting(result.filename, 'helpful')"
                                         [disabled]="getFeedbackStatus(result.filename)?.status === 'submitting'"
                                         (click)="submitFeedback(result, 'helpful')">
-                                    👍 Helpful
+                                    <span *ngIf="!isFeedbackSubmitting(result.filename, 'helpful')">👍 Helpful</span>
+                                    <span *ngIf="isFeedbackSubmitting(result.filename, 'helpful')" class="loading-spinner"></span>
                                 </button>
-                                <button class="feedback-btn"
+                                <button class="feedback-btn feedback-btn-refine"
                                         [class.active]="isFeedbackSubmitting(result.filename, 'unclear')"
                                         [disabled]="getFeedbackStatus(result.filename)?.status === 'submitting'"
                                         (click)="submitFeedback(result, 'unclear')">
-                                    😕 Unclear
+                                    <span *ngIf="!isFeedbackSubmitting(result.filename, 'unclear')">😕 Unclear</span>
+                                    <span *ngIf="isFeedbackSubmitting(result.filename, 'unclear')" class="loading-spinner"></span>
                                 </button>
-                                <button class="feedback-btn"
+                                <button class="feedback-btn feedback-btn-refine"
                                         [class.active]="isFeedbackSubmitting(result.filename, 'inaccurate')"
                                         [disabled]="getFeedbackStatus(result.filename)?.status === 'submitting'"
                                         (click)="submitFeedback(result, 'inaccurate')">
-                                    ❌ Inaccurate
+                                    <span *ngIf="!isFeedbackSubmitting(result.filename, 'inaccurate')">❌ Inaccurate</span>
+                                    <span *ngIf="isFeedbackSubmitting(result.filename, 'inaccurate')" class="loading-spinner"></span>
                                 </button>
                             </div>
-                            <div *ngIf="getFeedbackStatus(result.filename)" 
+                            <div *ngIf="getFeedbackStatus(result.filename)"
                                  class="feedback-message"
                                  [class.success]="isFeedbackSuccess(result.filename)"
                                  [class.error]="isFeedbackError(result.filename)">
@@ -143,4 +203,12 @@
             </div>
         </div>
     </div>
+
+    <!-- Feedback Dialog -->
+    <app-feedback-dialog
+        [feedbackType]="currentFeedbackType"
+        [isOpen]="showFeedbackDialog"
+        (close)="closeFeedbackDialog()"
+        (submit)="submitFeedbackWithText($event)"
+    ></app-feedback-dialog>
 </div>

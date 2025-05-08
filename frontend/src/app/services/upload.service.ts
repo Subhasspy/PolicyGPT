@@ -15,6 +15,9 @@ export interface DocumentSummary {
 export interface UploadOptions {
   targetLanguage?: string;
   customPrompt?: string;
+  readingLevel?: string;
+  interests?: string[];
+  ageGroup?: string;
 }
 
 interface UploadResponse {
@@ -24,6 +27,8 @@ interface UploadResponse {
       original: string;
       [key: string]: string;
     };
+    originalText?: string;
+    personalized?: boolean;
     error?: string;
   }>;
   metadata: {
@@ -42,7 +47,7 @@ export class UploadService {
 
   private handleError(error: HttpErrorResponse) {
     let errorMessage = 'An error occurred during the upload.';
-    
+
     if (error.status === 0) {
       errorMessage = 'Unable to connect to the server. Please check if the server is running and accessible.';
     } else if (error.status === 422) {
@@ -57,7 +62,7 @@ export class UploadService {
     } else {
       errorMessage = `Server error: ${error.status}. ${error.error?.message || error.message}`;
     }
-    
+
     console.error('Upload error:', error);
     return throwError(() => errorMessage);
   }
@@ -73,10 +78,28 @@ export class UploadService {
     return this.http.get(`${this.apiUrl}/languages`);
   }
 
-  submitFeedback(feedback: { summary_id: string; feedback_type: string }): Observable<any> {
+  submitFeedback(feedback: {
+    summary_id: string;
+    feedback_type: string;
+    original_text?: string;
+    original_summary?: string;
+    feedback_text?: string;
+  }): Observable<any> {
     const formData = new FormData();
     formData.append('summary_id', feedback.summary_id);
     formData.append('feedback_type', feedback.feedback_type);
+
+    // Add original text and summary if available for refinement
+    if (feedback.original_text) {
+      formData.append('original_text', feedback.original_text);
+    }
+    if (feedback.original_summary) {
+      formData.append('original_summary', feedback.original_summary);
+    }
+    if (feedback.feedback_text) {
+      formData.append('feedback_text', feedback.feedback_text);
+    }
+
     return this.http.post(`${this.apiUrl}/feedback`, formData);
   }
 }
