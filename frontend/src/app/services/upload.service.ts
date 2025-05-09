@@ -84,6 +84,7 @@ export class UploadService {
     original_text?: string;
     original_summary?: string;
     feedback_text?: string;
+    target_language?: string;
   }): Observable<any> {
     const formData = new FormData();
     formData.append('summary_id', feedback.summary_id);
@@ -98,6 +99,9 @@ export class UploadService {
     }
     if (feedback.feedback_text) {
       formData.append('feedback_text', feedback.feedback_text);
+    }
+    if (feedback.target_language) {
+      formData.append('target_language', feedback.target_language);
     }
 
     return this.http.post(`${this.apiUrl}/feedback`, formData);

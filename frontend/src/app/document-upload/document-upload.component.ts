@@ -320,12 +320,16 @@ export class DocumentUploadComponent implements OnInit {
     // Only send original text and summary for unclear/inaccurate feedback
     const needsRefinement = feedbackType === 'unclear' || feedbackType === 'inaccurate';
 
+    // Check if we need to include target language for translation
+    const targetLanguage = this.selectedLanguage || undefined;
+
     this.uploadService.submitFeedback({
       summary_id: result.filename,
       feedback_type: feedbackType,
       original_text: needsRefinement ? result.originalText : undefined,
       original_summary: needsRefinement ? result.summaries.original : undefined,
-      feedback_text: feedbackText || undefined
+      feedback_text: feedbackText || undefined,
+      target_language: targetLanguage
     }).subscribe({
       next: (response) => {
         // If we got a refined summary, update the result
@@ -335,6 +339,12 @@ export class DocumentUploadComponent implements OnInit {
 
           // Update the summary with the refined version
           result.summaries.original = response.summaries.original;
+
+          // If we have a translated version, update that too
+          if (targetLanguage && response.summaries[targetLanguage]) {
+            console.log(`Received translated refined summary for language: ${targetLanguage}`);
+            result.summaries[targetLanguage] = response.summaries[targetLanguage];
+          }
 
           this.feedbackStatus[result.filename] = {
             status: 'success',

@@ -166,7 +166,8 @@ async def submit_feedback(
     feedback_type: str = Form(...),
     feedback_text: Optional[str] = Form(None),
     original_text: Optional[str] = Form(None),
-    original_summary: Optional[str] = Form(None)
+    original_summary: Optional[str] = Form(None),
+    target_language: Optional[str] = Form(None)
 ):
     """Submit feedback for a summary and get refined version if needed"""
     try:
@@ -196,13 +197,27 @@ async def submit_feedback(
             logger.info(f"Generated refined summary - Length: {len(refined_summary)} characters")
             logger.info(f"Complete refined summary: {refined_summary}")
 
-            return {
+            # Prepare response with the refined summary
+            response = {
                 "status": "success",
                 "message": "Summary has been refined based on your feedback",
                 "summaries": {
                     "original": refined_summary  # Override original with refined
                 }
             }
+
+            # If target language is specified, translate the refined summary
+            if target_language and target_language in SUPPORTED_LANGUAGES:
+                logger.info(f"Translating refined summary to {target_language}")
+                try:
+                    translated_summary = await translate_text(refined_summary, target_language)
+                    response["summaries"][target_language] = translated_summary
+                    logger.info(f"Translation successful for refined summary")
+                except Exception as e:
+                    logger.error(f"Error translating refined summary: {str(e)}")
+                    # Continue even if translation fails, just without the translation
+
+            return response
 
         return {
             "status": "success",

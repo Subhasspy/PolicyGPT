@@ -7,7 +7,11 @@ import asyncio
 from functools import lru_cache
 import hashlib
 from typing import Optional, Dict, Any, List
+import tiktoken
 from pdf_service import chunk_text_by_tokens
+
+# Initialize tokenizer for GPT models (same as in pdf_service.py)
+tokenizer = tiktoken.get_encoding("cl100k_base")
 
 logger = logging.getLogger(__name__)
 
